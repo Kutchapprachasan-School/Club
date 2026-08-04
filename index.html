@@ -342,9 +342,33 @@
                                 }
                             })[serverMethodName](...args);
                     } else {
-                        clearTimeout(timer);
-                        finished = true;
-                        onFailure(new Error("Google Apps Script unavailable"));
+                        // เมื่อรันบน GitHub Pages -> ใช้ Fetch API ยิง REST API ไปยัง Google Apps Script Backend
+                        const defaultGasUrl = "https://script.google.com/macros/s/1FTTeb8fSgisUr5JAsgGMsRhiyQrLShmu5Wzmc_N9Z2ahxxIgTHP3YxjB/exec";
+                        const apiUrl = (typeof window !== 'undefined' && localStorage.getItem('gudjap_gas_api_url')) || defaultGasUrl;
+                        
+                        fetch(apiUrl, {
+                            method: 'POST',
+                            mode: 'cors',
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                            body: JSON.stringify({ action: serverMethodName, args: args })
+                        })
+                        .then(res => res.json())
+                        .then(res => {
+                            if (finished) return;
+                            finished = true;
+                            clearTimeout(timer);
+                            onSuccess(res);
+                        })
+                        .catch(err => {
+                            if (finished) return;
+                            clearTimeout(timer);
+                            if (attempt <= maxRetries) {
+                                setTimeout(execute, 1000);
+                            } else {
+                                finished = true;
+                                onFailure(err);
+                            }
+                        });
                     }
                 };
                 execute();
@@ -412,66 +436,59 @@
 
             const loadAllData = () => {
                 setIsLoading(true);
-                if (typeof google !== 'undefined' && google.script && google.script.run) {
-                    setIsOfflineMode(false);
-                    google.script.run
-                        .withSuccessHandler((response) => {
-                            if (response && response.success) {
-                                if (response.students) setStudents(response.students);
-                                if (response.settings) {
-                                    if (response.settings.clubName) {
-                                        setClubName(response.settings.clubName);
-                                        if (typeof window !== 'undefined') localStorage.setItem('gudjap_club_name', response.settings.clubName);
-                                    }
-                                    if (response.settings.teacherName) {
-                                        setTeacherName(response.settings.teacherName);
-                                        if (typeof window !== 'undefined') localStorage.setItem('gudjap_teacher_name', response.settings.teacherName);
-                                    }
-                                    if (response.settings.clubLogo) {
-                                        setClubLogo(response.settings.clubLogo);
-                                        if (typeof window !== 'undefined') localStorage.setItem('gudjap_club_logo', response.settings.clubLogo);
-                                    }
-                                    if (response.settings.maxCapacity) setMaxCapacity(parseInt(response.settings.maxCapacity) || 40);
-                                    if (response.settings.studyDay) setStudyDay(response.settings.studyDay);
-                                    if (response.settings.studyTime) setStudyTime(response.settings.studyTime);
+                setIsOfflineMode(false);
+                callServerWithRetry(
+                    'getDatabaseData',
+                    [],
+                    (response) => {
+                        if (response && (response.success || response.students)) {
+                            if (response.students) setStudents(response.students);
+                            if (response.settings) {
+                                if (response.settings.clubName) {
+                                    setClubName(response.settings.clubName);
+                                    if (typeof window !== 'undefined') localStorage.setItem('gudjap_club_name', response.settings.clubName);
                                 }
-                                if (response.records) setRecords(response.records);
-                                if (response.assignments) setAssignments(response.assignments);
-                                if (response.submissions) setSubmissions(response.submissions);
-
-                                // ตรวจสอบการล็อกอินคงค้างหลังจากข้อมูลโหลดสำเร็จแล้ว
-                                checkUserCache();
+                                if (response.settings.teacherName) {
+                                    setTeacherName(response.settings.teacherName);
+                                    if (typeof window !== 'undefined') localStorage.setItem('gudjap_teacher_name', response.settings.teacherName);
+                                }
+                                if (response.settings.clubLogo) {
+                                    setClubLogo(response.settings.clubLogo);
+                                    if (typeof window !== 'undefined') localStorage.setItem('gudjap_club_logo', response.settings.clubLogo);
+                                }
+                                if (response.settings.maxCapacity) setMaxCapacity(parseInt(response.settings.maxCapacity) || 40);
+                                if (response.settings.studyDay) setStudyDay(response.settings.studyDay);
+                                if (response.settings.studyTime) setStudyTime(response.settings.studyTime);
                             }
-                            setIsLoading(false);
-                            setIsInitialLoading(false);
-                            var preloader = document.getElementById('native-preloader'); if (preloader) preloader.classList.add('hidden');
-                        })
-                        .withFailureHandler((err) => {
-                            showToast('เชื่อมต่อคลาวด์ Sheets ผิดพลาด: ' + err.message, 'error');
-                            setIsLoading(false);
-                            setIsInitialLoading(false);
-                            var preloader = document.getElementById('native-preloader'); if (preloader) preloader.classList.add('hidden');
-                        })
-                        .getDatabaseData();
-                } else {
-                    // ทำงานในระบบ Demo/Sandbox
-                    setIsOfflineMode(true);
-                    setIsLoading(false);
-                    setIsInitialLoading(false);
-                    var preloader = document.getElementById('native-preloader'); if (preloader) preloader.classList.add('hidden');
-                    setStudents([
-                        { id: '1', studentId: '10001', prefix: 'เด็กชาย', name: 'กฤษณะ รักเรียน', level: 'ม.1', username: 'student1', role: 'student' },
-                        { id: '2', studentId: '10002', prefix: 'เด็กหญิง', name: 'พิมลดา รักษ์ดี', level: 'ม.2', username: 'student2', role: 'student' }
-                    ]);
-                    setRecords({
-                        '2026-06-01': { '10001': 'present', '10002': 'present' }
-                    });
-                    setAssignments([
-                        { id: 'asgn-1', title: 'ใบงานที่ 1: การใช้ฟังก์ชัน Google Apps Script', description: 'ให้นักเรียนเขียนสคริปต์ส่งข้อความลงชีต พร้อมแนบลิงก์ Google Docs/Drive ผลงาน', dueDate: '2026-08-15', points: 10, createdAt: '2026-08-01 10:00:00' }
-                    ]);
-                    setSubmissions([]);
-                    checkUserCache();
-                }
+                            if (response.records) setRecords(response.records);
+                            if (response.assignments) setAssignments(response.assignments);
+                            if (response.submissions) setSubmissions(response.submissions);
+
+                            checkUserCache();
+                        }
+                        setIsLoading(false);
+                        setIsInitialLoading(false);
+                        var preloader = document.getElementById('native-preloader'); if (preloader) preloader.classList.add('hidden');
+                    },
+                    (err) => {
+                        setIsOfflineMode(true);
+                        setIsLoading(false);
+                        setIsInitialLoading(false);
+                        var preloader = document.getElementById('native-preloader'); if (preloader) preloader.classList.add('hidden');
+                        setStudents([
+                            { id: '1', studentId: '10001', prefix: 'เด็กชาย', name: 'กฤษณะ รักเรียน', level: 'ม.1', username: 'student1', role: 'student' },
+                            { id: '2', studentId: '10002', prefix: 'เด็กหญิง', name: 'พิมลดา รักษ์ดี', level: 'ม.2', username: 'student2', role: 'student' }
+                        ]);
+                        setRecords({
+                            '2026-06-01': { '10001': 'present', '10002': 'present' }
+                        });
+                        setAssignments([
+                            { id: 'asgn-1', title: 'ใบงานที่ 1: การใช้ฟังก์ชัน Google Apps Script', description: 'ให้นักเรียนเขียนสคริปต์ส่งข้อความลงชีต พร้อมแนบลิงก์ Google Docs/Drive ผลงาน', dueDate: '2026-08-15', points: 10, createdAt: '2026-08-01 10:00:00' }
+                        ]);
+                        setSubmissions([]);
+                        checkUserCache();
+                    }
+                );
             };
 
             // บีบอัดรูปภาพฝั่ง Client ก่อนแปลงเป็น Base64 ส่งไปยัง Drive (ไม่เกิน 1280px)

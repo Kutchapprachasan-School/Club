@@ -1,16 +1,70 @@
 /**
- * ฟังก์ชันหลักในการให้บริการเว็บแอปพลิเคชัน (Web App)
- * ทำหน้าที่เชื่อมโยง URL และส่งผ่านพารามิเตอร์โหมดระบบ
+ * ฟังก์ชันหลักในการให้บริการเว็บแอปพลิเคชัน (Web App & API Endpoint)
+ * รองรับทั้งการรันตรงบน Google Apps Script และการเชื่อมต่อ API จาก GitHub Pages
  */
 function doGet(e) {
+  if (e && e.parameter && e.parameter.action) {
+    return handleApiRequest(e.parameter.action, e.parameter);
+  }
   var template = HtmlService.createTemplateFromFile('index');
   var mode = (e && e.parameter && e.parameter.mode) ? e.parameter.mode : 'edit';
   template.mode = mode;
   
   return template.evaluate()
-      .setTitle('ระบบบริหารจัดการโรงเรียนกุดจับประชาสรรค์ - วิชาชุมนุม')
+      .setTitle('ระบบกิจกรรมวิชาชุมนุม - โรงเรียนกุดจับประชาสรรค์')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+/**
+ * REST API Endpoint สำหรับรับคำขอจาก GitHub Pages (JSON POST)
+ */
+function doPost(e) {
+  try {
+    var data = {};
+    if (e && e.postData && e.postData.contents) {
+      data = JSON.parse(e.postData.contents);
+    } else if (e && e.parameter) {
+      data = e.parameter;
+    }
+    var action = data.action;
+    var args = data.args || [];
+    return handleApiRequest(action, args);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, message: "API Error: " + err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * API Router ประมวลผลคำขอและส่งคืนผลลัพธ์เป็น JSON
+ */
+function handleApiRequest(action, args) {
+  var result = null;
+  if (!Array.isArray(args)) {
+    args = [args];
+  }
+  
+  try {
+    if (action === "getDatabaseData") result = getDatabaseData();
+    else if (action === "saveAttendanceOnSheet") result = saveAttendanceOnSheet.apply(null, args);
+    else if (action === "saveAssignmentOnSheet") result = saveAssignmentOnSheet.apply(null, args);
+    else if (action === "updateAssignmentOnSheet") result = updateAssignmentOnSheet.apply(null, args);
+    else if (action === "deleteAssignmentOnSheet") result = deleteAssignmentOnSheet.apply(null, args);
+    else if (action === "submitAssignmentOnSheet") result = submitAssignmentOnSheet.apply(null, args);
+    else if (action === "gradeSubmissionOnSheet") result = gradeSubmissionOnSheet.apply(null, args);
+    else if (action === "saveSettingsToSheet") result = saveSettingsToSheet.apply(null, args);
+    else if (action === "updateStudentsOnSheet") result = updateStudentsOnSheet.apply(null, args);
+    else if (action === "deleteAttendanceDay") result = deleteAttendanceDay.apply(null, args);
+    else if (action === "saveCheckinSettings") result = saveCheckinSettings.apply(null, args);
+    else if (action === "loginUser") result = loginUser.apply(null, args);
+    else result = { success: false, message: "Unknown action: " + action };
+  } catch(err) {
+    result = { success: false, message: err.message };
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
