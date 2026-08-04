@@ -342,16 +342,13 @@
                                 }
                             })[serverMethodName](...args);
                     } else {
-                        // เมื่อรันบน GitHub Pages -> ใช้ Fetch API ยิง REST API ไปยัง Google Apps Script Backend
+                        // เมื่อรันบน GitHub Pages -> ใช้ Fetch API ยิง REST API ไปยัง Google Apps Script Backend (GET/POST CORS Safe)
                         const defaultGasUrl = "https://script.google.com/macros/s/1FTTeb8fSgisUr5JAsgGMsRhiyQrLShmu5Wzmc_N9Z2ahxxIgTHP3YxjB/exec";
                         const apiUrl = (typeof window !== 'undefined' && localStorage.getItem('gudjap_gas_api_url')) || defaultGasUrl;
                         
-                        fetch(apiUrl, {
-                            method: 'POST',
-                            mode: 'cors',
-                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                            body: JSON.stringify({ action: serverMethodName, args: args })
-                        })
+                        const getUrl = `${apiUrl}?action=${encodeURIComponent(serverMethodName)}&args=${encodeURIComponent(JSON.stringify(args))}&t=${Date.now()}`;
+                        
+                        fetch(getUrl, { redirect: 'follow' })
                         .then(res => res.json())
                         .then(res => {
                             if (finished) return;
@@ -360,14 +357,33 @@
                             onSuccess(res);
                         })
                         .catch(err => {
-                            if (finished) return;
-                            clearTimeout(timer);
-                            if (attempt <= maxRetries) {
-                                setTimeout(execute, 1000);
-                            } else {
+                            // Fallback to URLSearchParams POST
+                            const params = new URLSearchParams();
+                            params.append('action', serverMethodName);
+                            params.append('args', JSON.stringify(args));
+                            
+                            fetch(apiUrl, {
+                                method: 'POST',
+                                body: params,
+                                redirect: 'follow'
+                            })
+                            .then(res => res.json())
+                            .then(res => {
+                                if (finished) return;
                                 finished = true;
-                                onFailure(err);
-                            }
+                                clearTimeout(timer);
+                                onSuccess(res);
+                            })
+                            .catch(err2 => {
+                                if (finished) return;
+                                clearTimeout(timer);
+                                if (attempt <= maxRetries) {
+                                    setTimeout(execute, 1000);
+                                } else {
+                                    finished = true;
+                                    onFailure(err2);
+                                }
+                            });
                         });
                     }
                 };

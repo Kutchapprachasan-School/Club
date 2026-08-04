@@ -4,7 +4,16 @@
  */
 function doGet(e) {
   if (e && e.parameter && e.parameter.action) {
-    return handleApiRequest(e.parameter.action, e.parameter);
+    var action = e.parameter.action;
+    var args = [];
+    if (e.parameter.args) {
+      try {
+        args = JSON.parse(e.parameter.args);
+      } catch(err) {
+        args = [e.parameter.args];
+      }
+    }
+    return handleApiRequest(action, args);
   }
   var template = HtmlService.createTemplateFromFile('index');
   var mode = (e && e.parameter && e.parameter.mode) ? e.parameter.mode : 'edit';
@@ -17,18 +26,28 @@ function doGet(e) {
 }
 
 /**
- * REST API Endpoint สำหรับรับคำขอจาก GitHub Pages (JSON POST)
+ * REST API Endpoint สำหรับรับคำขอจาก GitHub Pages (POST)
  */
 function doPost(e) {
   try {
-    var data = {};
-    if (e && e.postData && e.postData.contents) {
-      data = JSON.parse(e.postData.contents);
-    } else if (e && e.parameter) {
-      data = e.parameter;
+    var action = "";
+    var args = [];
+    
+    if (e && e.parameter && e.parameter.action) {
+      action = e.parameter.action;
+      if (e.parameter.args) {
+        try { args = JSON.parse(e.parameter.args); } catch(err) { args = [e.parameter.args]; }
+      }
+    } else if (e && e.postData && e.postData.contents) {
+      try {
+        var data = JSON.parse(e.postData.contents);
+        action = data.action;
+        args = data.args || [];
+      } catch(err) {
+        action = e.parameter ? e.parameter.action : "";
+      }
     }
-    var action = data.action;
-    var args = data.args || [];
+    
     return handleApiRequest(action, args);
   } catch(err) {
     return ContentService.createTextOutput(JSON.stringify({ success: false, message: "API Error: " + err.message }))
