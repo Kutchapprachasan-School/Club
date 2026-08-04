@@ -1561,7 +1561,44 @@
                             </div>
 
                             <h2 className="text-2xl font-black text-[#1a2e40] text-center px-4 leading-normal">{clubName}</h2>
-                            <p className="text-slate-400 text-xs mt-1 mb-6 font-bold uppercase tracking-wider text-center">คุณครูผู้ดูแล: {teacherName}</p>
+                            <p className="text-slate-400 text-xs mt-1 mb-4 font-bold uppercase tracking-wider text-center">คุณครูผู้ดูแล: {teacherName}</p>
+
+                            {/* แผงเชื่อมต่อ API Google Sheets เมื่อรันบน GitHub Pages */}
+                            {isOfflineMode && (
+                                <div className="w-full mb-4 bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs">
+                                    <div className="flex items-center justify-between text-amber-800 font-bold mb-1">
+                                        <span>🌐 เชื่อมต่อกับ Google Sheets</span>
+                                        <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">GitHub Pages</span>
+                                    </div>
+                                    <p className="text-[11px] text-amber-700 mb-2">เพื่อซิงค์ข้อมูลกับ Google Sheets บน GitHub Pages กรุณาระบุ Web App URL (ขึ้นต้นด้วย https://script.google.com/macros/s/AKfycb.../exec):</p>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="url"
+                                            placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                                            defaultValue={(typeof window !== 'undefined' && localStorage.getItem('gudjap_gas_api_url')) || ''}
+                                            id="gas-url-input"
+                                            className="flex-1 px-3 py-1.5 border border-amber-300 rounded-xl text-xs font-mono bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const val = document.getElementById('gas-url-input')?.value?.trim();
+                                                if (val) {
+                                                    localStorage.setItem('gudjap_gas_api_url', val);
+                                                    showToast('เชื่อมต่อ Web App API สำเร็จ! กำลังโหลดข้อมูลใหม่...', 'success');
+                                                    loadAllData();
+                                                } else {
+                                                    localStorage.removeItem('gudjap_gas_api_url');
+                                                    showToast('ลบการเชื่อมต่อ API แล้ว', 'info');
+                                                }
+                                            }}
+                                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition shadow-sm whitespace-nowrap"
+                                        >
+                                            💾 เชื่อมต่อ
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="bg-[#f0f2f5] p-1.5 rounded-full w-full flex mb-6 border border-slate-200/50">
                                 <button 
