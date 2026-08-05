@@ -241,6 +241,7 @@
             const [rememberMe, setRememberMe] = useState(true);
             const [notification, setNotification] = useState(null);
             const [calendarDate, setCalendarDate] = useState(() => new Date());
+            const [gasApiUrlInput, setGasApiUrlInput] = useState(() => (typeof window !== 'undefined' && localStorage.getItem('gudjap_gas_api_url')) || '');
 
             // ระบบการบ้านและภารกิจ (Assignments & Submissions)
             const [assignments, setAssignments] = useState([]);
@@ -852,30 +853,41 @@
                 }
             };
 
+            // บันทึกการเชื่อมต่อ Web App API URL ลง localStorage
+            const handleSaveGasUrl = () => {
+                const val = gasApiUrlInput.trim();
+                if (val) {
+                    localStorage.setItem('gudjap_gas_api_url', val);
+                    showToast('บันทึก Web App API URL สำเร็จ! กำลังเชื่อมต่อข้อมูล...', 'success');
+                    loadAllData();
+                } else {
+                    localStorage.removeItem('gudjap_gas_api_url');
+                    showToast('ลบการเชื่อมต่อ API แล้ว', 'info');
+                    loadAllData();
+                }
+            };
+
             // บันทึกการเช็คชื่อรายวันลง Google Sheets (Manual Save)
             const saveAttendanceToSheet = (targetDate, dayRecords) => {
                 if (currentUser?.role !== 'teacher') return;
                 setIsSaving(true);
-                if (typeof google !== 'undefined' && google.script && google.script.run) {
-                    google.script.run
-                        .withSuccessHandler((success) => {
-                            setIsSaving(false);
-                            if (success) {
-                                showToast(`บันทึกเวลาเรียนประจำวันที่ ${formatThaiDate(targetDate)} สำเร็จ`);
-                                setIsDirty(false); // ล้างแจ้งเตือนข้อมูลค้างบันทึก
-                            } else {
-                                showToast('ล้มเหลวในการบันทึก กรุณาลองใหม่', 'error');
-                            }
-                        })
-                        .withFailureHandler(() => { setIsSaving(false); showToast('เกิดข้อผิดพลาดในการเชื่อมต่อคลาวด์', 'error'); })
-                        .saveAttendanceOnSheet(targetDate, JSON.stringify(dayRecords), currentUser.username, loginPassword);
-                } else {
-                    setTimeout(() => { 
-                        setIsSaving(false); 
-                        setIsDirty(false);
-                        showToast('[จำลอง] บันทึกในเบราว์เซอร์ชั่วคราวแล้ว'); 
-                    }, 500);
-                }
+                callServerWithRetry(
+                    'saveAttendanceOnSheet',
+                    [targetDate, JSON.stringify(dayRecords), currentUser.username, loginPassword],
+                    (success) => {
+                        setIsSaving(false);
+                        if (success) {
+                            showToast(`บันทึกเวลาเรียนประจำวันที่ ${formatThaiDate(targetDate)} สำเร็จ`);
+                            setIsDirty(false);
+                        } else {
+                            showToast('ล้มเหลวในการบันทึก กรุณาลองใหม่', 'error');
+                        }
+                    },
+                    (err) => {
+                        setIsSaving(false);
+                        showToast('เกิดข้อผิดพลาดในการเชื่อมต่อคลาวด์: ' + (err.message || err), 'error');
+                    }
+                );
             };
 
             // ปุ่มเซฟเช็คชื่อย้อนหลัง / รายวันแบบกดด้วยตัวเอง
@@ -889,37 +901,27 @@
                 if (currentUser?.role !== 'teacher') return;
                 if (confirm(`คุณต้องการลบประวัติการเช็คชื่อทั้งหมดของวันที่ ${formatThaiDate(dateToDelete)} ออกจากระบบใช่หรือไม่?`)) {
                     setIsSaving(true);
-                    if (typeof google !== 'undefined' && google.script && google.script.run) {
-                        google.script.run
-                            .withSuccessHandler((success) => {
-                                setIsSaving(false);
-                                if (success) {
-                                    showToast(`ลบประวัติเช็คชื่อวันที่ ${formatThaiDate(dateToDelete)} เรียบร้อยแล้ว`);
-                                    setRecords(prev => {
-                                        const updated = { ...prev };
-                                        delete updated[dateToDelete];
-                                        return updated;
-                                    });
-                                } else {
-                                    showToast('ล้มเหลวในการลบประวัติจาก Google Sheets', 'error');
-                                }
-                            })
-                            .withFailureHandler((err) => {
-                                setIsSaving(false);
-                                showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
-                            })
-                            .deleteAttendanceDay(dateToDelete, currentUser.username, loginPassword);
-                    } else {
-                        setTimeout(() => {
+                    callServerWithRetry(
+                        'deleteAttendanceDay',
+                        [dateToDelete, currentUser.username, loginPassword],
+                        (success) => {
                             setIsSaving(false);
-                            setRecords(prev => {
-                                const updated = { ...prev };
-                                delete updated[dateToDelete];
-                                return updated;
-                            });
-                            showToast('[จำลอง] ลบประวัติเช็คชื่อเรียบร้อย');
-                        }, 500);
-                    }
+                            if (success) {
+                                showToast(`ลบประวัติเช็คชื่อวันที่ ${formatThaiDate(dateToDelete)} เรียบร้อยแล้ว`);
+                                setRecords(prev => {
+                                    const updated = { ...prev };
+                                    delete updated[dateToDelete];
+                                    return updated;
+                                });
+                            } else {
+                                showToast('ล้มเหลวในการลบประวัติจาก Google Sheets', 'error');
+                            }
+                        },
+                        (err) => {
+                            setIsSaving(false);
+                            showToast('เกิดข้อผิดพลาด: ' + (err.message || err), 'error');
+                        }
+                    );
                 }
             };
 
@@ -930,63 +932,35 @@
                 setIsLoading(true);
                 setIsLoggingIn(true);
 
-                if (typeof google !== 'undefined' && google.script && google.script.run) {
-                    google.script.run
-                        .withSuccessHandler((result) => {
-                            setIsLoading(false);
-                            setIsLoggingIn(false);
-                            if (result && result.success) {
-                                setCurrentUser(result.user);
-                                if (typeof window !== 'undefined') {
-                                    localStorage.setItem('gudjap_user', JSON.stringify(result.user));
-                                    localStorage.setItem('gudjap_pass', loginPassword);
-                                    sessionStorage.setItem('gudjap_pass', loginPassword);
-                                }
-                                showToast(`ยินดีต้อนรับ ${result.user.prefix}${result.user.name}`, 'success');
-                                if (result.user.role === 'teacher') {
-                                    setActiveTab('check');
-                                } else {
-                                    setActiveTab('dashboard');
-                                }
-                            } else {
-                                setAuthError(result.message || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
-                            }
-                        })
-                        .withFailureHandler((err) => {
-                            setIsLoading(false);
-                            setIsLoggingIn(false);
-                            setAuthError('ระบบขัดข้อง: ' + err.message);
-                        })
-                        .loginUser(loginUsername, loginPassword);
-                } else {
-                    setTimeout(() => {
+                callServerWithRetry(
+                    'loginUser',
+                    [loginUsername, loginPassword],
+                    (result) => {
                         setIsLoading(false);
                         setIsLoggingIn(false);
-                        if (loginUsername === 'admin' && loginPassword === '1234') {
-                            const fakeUser = { id: 'admin', studentId: '99999', prefix: 'นาย', name: 'ครูผู้สอน', level: 'ครู', role: 'teacher', username: 'admin' };
-                            setCurrentUser(fakeUser);
+                        if (result && result.success) {
+                            setCurrentUser(result.user);
                             if (typeof window !== 'undefined') {
-                                localStorage.setItem('gudjap_user', JSON.stringify(fakeUser));
+                                localStorage.setItem('gudjap_user', JSON.stringify(result.user));
                                 localStorage.setItem('gudjap_pass', loginPassword);
                                 sessionStorage.setItem('gudjap_pass', loginPassword);
                             }
-                            setActiveTab('check');
-                            showToast('ยินดีต้อนรับ คุณครู (Demo Mode)', 'success');
-                        } else if (loginUsername === 'student' && loginPassword === '1234') {
-                            const fakeUser = { id: '1', studentId: '10001', prefix: 'เด็กชาย', name: 'กฤษณะ รักเรียน', level: 'ม.1', role: 'student', username: 'student' };
-                            setCurrentUser(fakeUser);
-                            if (typeof window !== 'undefined') {
-                                localStorage.setItem('gudjap_user', JSON.stringify(fakeUser));
-                                localStorage.setItem('gudjap_pass', loginPassword);
-                                sessionStorage.setItem('gudjap_pass', loginPassword);
+                            showToast(`ยินดีต้อนรับ ${result.user.prefix || ''}${result.user.name}`, 'success');
+                            if (result.user.role === 'teacher') {
+                                setActiveTab('check');
+                            } else {
+                                setActiveTab('dashboard');
                             }
-                            setActiveTab('dashboard');
-                            showToast('ยินดีต้อนรับ เด็กชายกฤษณะ (Demo Mode)', 'success');
                         } else {
-                            setAuthError('รหัสผ่านไม่ถูกต้อง (สำหรับทดสอบออฟไลน์ใช้แอดมิน: admin/1234 หรือนักเรียน: student/1234)');
+                            setAuthError((result && result.message) || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
                         }
-                    }, 400);
-                }
+                    },
+                    (err) => {
+                        setIsLoading(false);
+                        setIsLoggingIn(false);
+                        setAuthError('เข้าสู่ระบบล้มเหลว: ' + (err.message || err));
+                    }
+                );
             };
 
             // สมัครสมาชิกกิจกรรมชุมนุมด้วยตนเอง
@@ -1579,42 +1553,36 @@
                             <h2 className="text-2xl font-black text-[#1a2e40] text-center px-4 leading-normal">{clubName}</h2>
                             <p className="text-slate-400 text-xs mt-1 mb-4 font-bold uppercase tracking-wider text-center">คุณครูผู้ดูแล: {teacherName}</p>
 
-                            {/* แผงเชื่อมต่อ API Google Sheets เมื่อรันบน GitHub Pages */}
-                            {isOfflineMode && (
-                                <div className="w-full mb-4 bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs">
-                                    <div className="flex items-center justify-between text-amber-800 font-bold mb-1">
-                                        <span>🌐 เชื่อมต่อกับ Google Sheets</span>
-                                        <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">GitHub Pages</span>
-                                    </div>
-                                    <p className="text-[11px] text-amber-700 mb-2">เพื่อซิงค์ข้อมูลกับ Google Sheets บน GitHub Pages กรุณาระบุ Web App URL (ขึ้นต้นด้วย https://script.google.com/macros/s/AKfycb.../exec):</p>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="url"
-                                            placeholder="https://script.google.com/macros/s/AKfycb.../exec"
-                                            defaultValue={(typeof window !== 'undefined' && localStorage.getItem('gudjap_gas_api_url')) || ''}
-                                            id="gas-url-input"
-                                            className="flex-1 px-3 py-1.5 border border-amber-300 rounded-xl text-xs font-mono bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const val = document.getElementById('gas-url-input')?.value?.trim();
-                                                if (val) {
-                                                    localStorage.setItem('gudjap_gas_api_url', val);
-                                                    showToast('เชื่อมต่อ Web App API สำเร็จ! กำลังโหลดข้อมูลใหม่...', 'success');
-                                                    loadAllData();
-                                                } else {
-                                                    localStorage.removeItem('gudjap_gas_api_url');
-                                                    showToast('ลบการเชื่อมต่อ API แล้ว', 'info');
-                                                }
-                                            }}
-                                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition shadow-sm whitespace-nowrap"
-                                        >
-                                            💾 เชื่อมต่อ
-                                        </button>
-                                    </div>
+                            {/* แผงตั้งค่า / เปลี่ยน Web App API URL สำหรับ Google Sheets */}
+                            <div className="w-full mb-4 bg-slate-50 border border-slate-200/80 rounded-2xl p-3 text-xs shadow-sm">
+                                <div className="flex items-center justify-between text-slate-700 font-bold mb-1">
+                                    <span className="flex items-center gap-1.5 text-slate-800 font-extrabold">
+                                        <span>🔗 เชื่อมต่อ Web App API (Google Sheets)</span>
+                                    </span>
+                                    {isOfflineMode ? (
+                                        <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">โหมดจำลอง (ยังไม่เชื่อมต่อ)</span>
+                                    ) : (
+                                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">ออนไลน์แล้ว</span>
+                                    )}
                                 </div>
-                            )}
+                                <p className="text-[11px] text-slate-500 mb-2">ระบุลิงก์ Web App URL (https://script.google.com/macros/s/AKfycb.../exec) จาก Google Apps Script เพื่อดึง/เซฟข้อมูลกับ Google Sheets:</p>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="url"
+                                        placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                                        value={gasApiUrlInput}
+                                        onChange={(e) => setGasApiUrlInput(e.target.value)}
+                                        className="flex-1 px-3 py-1.5 border border-slate-300 rounded-xl text-xs font-mono bg-white focus:outline-none focus:ring-2 focus:ring-violet-400"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveGasUrl}
+                                        className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-xs transition shadow-sm whitespace-nowrap"
+                                    >
+                                        💾 บันทึกและเชื่อมต่อ
+                                    </button>
+                                </div>
+                            </div>
 
                             <div className="bg-[#f0f2f5] p-1.5 rounded-full w-full flex mb-6 border border-slate-200/50">
                                 <button 
