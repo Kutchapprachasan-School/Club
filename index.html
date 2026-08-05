@@ -694,7 +694,7 @@
                 }
             };
 
-            // ส่งงานภารกิจ (สำหรับนักเรียน)
+            // นักเรียนส่งผลงานการบ้าน / ภารกิจ
             const handleSubmitAssignment = (e) => {
                 e.preventDefault();
                 if (!activeSubmitAssignment) return;
@@ -712,17 +712,11 @@
                     showToast('กรุณาระบุลิงก์แนบผลงาน', 'error');
                     return;
                 }
-                if (reqType === 'image' && !submitImageBase64) {
+                if (reqType === 'image' && !submitImageBase64 && !submitImagePreview) {
                     showToast('กรุณเลือกและอัปโหลดรูปภาพผลงาน', 'error');
                     return;
                 }
-                if (reqType === 'all' && !submitContent.trim() && !submitLink.trim() && !submitImageBase64) {
-            // นักเรียนส่งผลงานการบ้าน / ภารกิจ
-            const handleSubmitAssignment = (e) => {
-                e.preventDefault();
-                if (!activeSubmitAssignment) return;
-
-                if (!submitContent.trim() && !submitLink.trim() && !submitImageBase64.trim() && !submitImagePreview.trim()) {
+                if (reqType === 'all' && !submitContent.trim() && !submitLink.trim() && !submitImageBase64 && !submitImagePreview) {
                     showToast('กรุณากรอกข้อความ แนบลิงก์ หรืออัปโหลดรูปภาพอย่างน้อย 1 ช่องทาง', 'error');
                     return;
                 }
