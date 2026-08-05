@@ -1553,36 +1553,34 @@
                             <h2 className="text-2xl font-black text-[#1a2e40] text-center px-4 leading-normal">{clubName}</h2>
                             <p className="text-slate-400 text-xs mt-1 mb-4 font-bold uppercase tracking-wider text-center">คุณครูผู้ดูแล: {teacherName}</p>
 
-                            {/* แผงตั้งค่า / เปลี่ยน Web App API URL สำหรับ Google Sheets */}
-                            <div className="w-full mb-4 bg-slate-50 border border-slate-200/80 rounded-2xl p-3 text-xs shadow-sm">
-                                <div className="flex items-center justify-between text-slate-700 font-bold mb-1">
-                                    <span className="flex items-center gap-1.5 text-slate-800 font-extrabold">
-                                        <span>🔗 เชื่อมต่อ Web App API (Google Sheets)</span>
-                                    </span>
-                                    {isOfflineMode ? (
-                                        <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">โหมดจำลอง (ยังไม่เชื่อมต่อ)</span>
-                                    ) : (
-                                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">ออนไลน์แล้ว</span>
-                                    )}
+                            {/* แผงตั้งค่า Web App API URL เฉพาะตอนแรกที่ยังไม่ได้เชื่อมต่อฐานข้อมูล */}
+                            {(isOfflineMode || !(typeof window !== 'undefined' && localStorage.getItem('gudjap_gas_api_url'))) && (
+                                <div className="w-full mb-4 bg-amber-50 border border-amber-200/80 rounded-2xl p-3 text-xs shadow-sm">
+                                    <div className="flex items-center justify-between text-amber-900 font-bold mb-1">
+                                        <span className="flex items-center gap-1.5 font-extrabold">
+                                            <span>🔗 ตั้งค่า Web App API (การเชื่อมต่อครั้งแรก)</span>
+                                        </span>
+                                        <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">ยังไม่เชื่อมต่อ</span>
+                                    </div>
+                                    <p className="text-[11px] text-amber-800 mb-2">เพื่อเชื่อมต่อฐานข้อมูล Google Sheets กรุณาระบุ Web App URL (ขึ้นต้นด้วย https://script.google.com/macros/s/AKfycb.../exec):</p>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="url"
+                                            placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                                            value={gasApiUrlInput}
+                                            onChange={(e) => setGasApiUrlInput(e.target.value)}
+                                            className="flex-1 px-3 py-1.5 border border-amber-300 rounded-xl text-xs font-mono bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleSaveGasUrl}
+                                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition shadow-sm whitespace-nowrap"
+                                        >
+                                            💾 เชื่อมต่อ
+                                        </button>
+                                    </div>
                                 </div>
-                                <p className="text-[11px] text-slate-500 mb-2">ระบุลิงก์ Web App URL (https://script.google.com/macros/s/AKfycb.../exec) จาก Google Apps Script เพื่อดึง/เซฟข้อมูลกับ Google Sheets:</p>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="url"
-                                        placeholder="https://script.google.com/macros/s/AKfycb.../exec"
-                                        value={gasApiUrlInput}
-                                        onChange={(e) => setGasApiUrlInput(e.target.value)}
-                                        className="flex-1 px-3 py-1.5 border border-slate-300 rounded-xl text-xs font-mono bg-white focus:outline-none focus:ring-2 focus:ring-violet-400"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={handleSaveGasUrl}
-                                        className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-xs transition shadow-sm whitespace-nowrap"
-                                    >
-                                        💾 บันทึกและเชื่อมต่อ
-                                    </button>
-                                </div>
-                            </div>
+                            )}
 
                             <div className="bg-[#f0f2f5] p-1.5 rounded-full w-full flex mb-6 border border-slate-200/50">
                                 <button 
@@ -2860,6 +2858,28 @@
                                                     <button onClick={resetLogoToDefault} className="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-xl">คืนค่าเริ่มต้น</button>
                                                 </div>
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    {/* เฉพาะครูแอดมิน: การจัดการตั้งค่า Web App API URL สำหรับ Google Sheets */}
+                                    <div className="pt-4 border-t">
+                                        <label className="text-sm font-bold text-slate-700 block mb-1">🌐 ลิงก์ Web App API สำหรับเชื่อมต่อ Google Sheets (เฉพาะ Admin / คุณครู)</label>
+                                        <p className="text-xs text-slate-400 mb-2">หากมีการเปลี่ยนไฟล์ Google Sheets หรือสร้างการทำให้ใช้งานได้ (Deployment) ชุดใหม่ นำ Web App URL มาวางเปลี่ยนที่นี่ได้ตลอดเวลา</p>
+                                        <div className="flex gap-2">
+                                            <input 
+                                                type="url" 
+                                                value={gasApiUrlInput} 
+                                                onChange={(e) => setGasApiUrlInput(e.target.value)} 
+                                                className="flex-1 px-4 py-2 border border-slate-300 rounded-xl font-mono text-xs focus:ring-2 focus:ring-violet-400 bg-slate-50 focus:bg-white" 
+                                                placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                                            />
+                                            <button 
+                                                type="button" 
+                                                onClick={handleSaveGasUrl} 
+                                                className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs rounded-xl transition shadow-sm whitespace-nowrap"
+                                            >
+                                                💾 บันทึกเปลี่ยนลิงก์ API
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
