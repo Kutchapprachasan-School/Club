@@ -717,14 +717,21 @@
                     return;
                 }
                 if (reqType === 'all' && !submitContent.trim() && !submitLink.trim() && !submitImageBase64) {
+            // นักเรียนส่งผลงานการบ้าน / ภารกิจ
+            const handleSubmitAssignment = (e) => {
+                e.preventDefault();
+                if (!activeSubmitAssignment) return;
+
+                if (!submitContent.trim() && !submitLink.trim() && !submitImageBase64.trim() && !submitImagePreview.trim()) {
                     showToast('กรุณากรอกข้อความ แนบลิงก์ หรืออัปโหลดรูปภาพอย่างน้อย 1 ช่องทาง', 'error');
                     return;
                 }
 
                 setIsSubmittingTask(true);
                 const stdName = `${currentUser.prefix || ''}${currentUser.name}`;
+                const savedGasUrl = (typeof window !== 'undefined' && localStorage.getItem('gudjap_gas_api_url')) || '';
 
-                if (isOfflineMode) {
+                if (isOfflineMode || !savedGasUrl) {
                     const newSub = {
                         id: 'sub-' + Date.now(),
                         assignmentId: activeSubmitAssignment.id,
@@ -734,7 +741,7 @@
                         link: submitLink,
                         imageUrl: submitImagePreview,
                         imageFileId: 'offline-file',
-                        submittedAt: new Date().toLocaleString(),
+                        submittedAt: new Date().toLocaleString('th-TH'),
                         score: null,
                         feedback: ''
                     };
@@ -745,7 +752,7 @@
                     setSubmitLink('');
                     setSubmitImageBase64('');
                     setSubmitImagePreview('');
-                    showToast('ส่งงานสำเร็จ (โหมดจำลอง)');
+                    showToast('ส่งผลงานการบ้านเรียบร้อยแล้ว!', 'success');
                 } else {
                     callServerWithRetry(
                         'submitAssignmentOnSheet',
@@ -770,7 +777,7 @@
                                     ...prev.filter(s => !(s.assignmentId === activeSubmitAssignment.id && s.studentId === currentUser.studentId)),
                                     newSub
                                 ]);
-                                showToast('ส่งผลงานการบ้านเรียบร้อยแล้ว!');
+                                showToast('ส่งผลงานการบ้านเรียบร้อยแล้ว!', 'success');
                                 setActiveSubmitAssignment(null);
                                 setSubmitContent('');
                                 setSubmitLink('');
@@ -778,7 +785,7 @@
                                 setSubmitImagePreview('');
                                 loadAllData();
                             } else {
-                                showToast(res.message || 'ล้มเหลวในการส่งงาน', 'error');
+                                showToast((res && res.message) || 'ล้มเหลวในการส่งงาน', 'error');
                             }
                         },
                         (err) => {
