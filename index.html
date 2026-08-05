@@ -932,6 +932,41 @@
                 setIsLoading(true);
                 setIsLoggingIn(true);
 
+                const savedGasUrl = (typeof window !== 'undefined' && localStorage.getItem('gudjap_gas_api_url')) || '';
+
+                // หากยังไม่ได้วาง Web App URL และอยู่ในโหมดออฟไลน์
+                if (!savedGasUrl && isOfflineMode) {
+                    setTimeout(() => {
+                        setIsLoading(false);
+                        setIsLoggingIn(false);
+                        if (loginUsername === 'admin' && loginPassword === '1234') {
+                            const fakeUser = { id: 'admin', studentId: '99999', prefix: 'นาย', name: 'ครูผู้สอน', level: 'ครู', role: 'teacher', username: 'admin' };
+                            setCurrentUser(fakeUser);
+                            if (typeof window !== 'undefined') {
+                                localStorage.setItem('gudjap_user', JSON.stringify(fakeUser));
+                                localStorage.setItem('gudjap_pass', loginPassword);
+                                sessionStorage.setItem('gudjap_pass', loginPassword);
+                            }
+                            setActiveTab('check');
+                            showToast('ยินดีต้อนรับ คุณครู (โหมดทดสอบออฟไลน์)', 'success');
+                        } else if (loginUsername === 'student' && loginPassword === '1234') {
+                            const fakeUser = { id: '1', studentId: '10001', prefix: 'เด็กชาย', name: 'กฤษณะ รักเรียน', level: 'ม.1', role: 'student', username: 'student' };
+                            setCurrentUser(fakeUser);
+                            if (typeof window !== 'undefined') {
+                                localStorage.setItem('gudjap_user', JSON.stringify(fakeUser));
+                                localStorage.setItem('gudjap_pass', loginPassword);
+                                sessionStorage.setItem('gudjap_pass', loginPassword);
+                            }
+                            setActiveTab('dashboard');
+                            showToast('ยินดีต้อนรับ นักเรียน (โหมดทดสอบออฟไลน์)', 'success');
+                        } else {
+                            setAuthError('ยังไม่ได้เชื่อมต่อ Google Sheets กรุณาระบุ Web App URL ด้านบน หรือใช้แอดมินทดสอบ: admin/1234 หรือนักเรียน: student/1234');
+                        }
+                    }, 300);
+                    return;
+                }
+
+                // เมื่อมีการระบุ Web App URL -> ยิง API ล็อกอินกับ Google Sheets จริง
                 callServerWithRetry(
                     'loginUser',
                     [loginUsername, loginPassword],
