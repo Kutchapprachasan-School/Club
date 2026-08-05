@@ -314,12 +314,13 @@
 
                 const execute = () => {
                     attempt++;
+                    const timeoutMs = (serverMethodName.includes('submit') || serverMethodName.includes('save') || serverMethodName.includes('update')) ? 45000 : 20000;
                     const timer = setTimeout(() => {
                         if (!finished) {
                             finished = true;
                             onFailure(new Error("การเชื่อมต่อหมดเวลา (Timeout) กรุณาลองใหม่อีกครั้ง"));
                         }
-                    }, 15000);
+                    }, timeoutMs);
 
                     if (typeof google !== 'undefined' && google.script && google.script.run) {
                         google.script.run
@@ -758,9 +759,10 @@
                     setSubmitImagePreview('');
                     showToast('ส่งผลงานการบ้านเรียบร้อยแล้ว!', 'success');
                 } else {
+                    const validImageBase64 = (submitImageBase64 && submitImageBase64.startsWith('data:')) ? submitImageBase64 : '';
                     callServerWithRetry(
                         'submitAssignmentOnSheet',
-                        [activeSubmitAssignment.id, currentUser.studentId, stdName, submitContent, submitLink, submitImageBase64, currentUser.username, loginPassword],
+                        [activeSubmitAssignment.id, currentUser.studentId, stdName, submitContent, submitLink, validImageBase64, currentUser.username, loginPassword],
                         (res) => {
                             setIsSubmittingTask(false);
                             if (res && res.success) {
@@ -771,7 +773,7 @@
                                     studentName: stdName,
                                     content: submitContent,
                                     link: submitLink,
-                                    imageUrl: submitImagePreview || (res && res.imageUrl) || '',
+                                    imageUrl: (res && res.imageUrl) || submitImagePreview || '',
                                     imageFileId: (res && res.imageFileId) || '',
                                     submittedAt: new Date().toLocaleString('th-TH'),
                                     score: null,
@@ -3059,7 +3061,7 @@
                                                                         setActiveSubmitAssignment(asgn);
                                                                         setSubmitContent(mySub ? mySub.content : '');
                                                                         setSubmitLink(mySub ? mySub.link : '');
-                                                                        setSubmitImageBase64(mySub ? mySub.imageUrl : '');
+                                                                        setSubmitImageBase64('');
                                                                         setSubmitImagePreview(mySub ? mySub.imageUrl : '');
                                                                     }}
                                                                     className="px-4 py-2 bg-[#7c3aed] hover:bg-violet-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"

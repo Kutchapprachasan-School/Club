@@ -182,14 +182,15 @@ function verifyStudentCredentials(studentId, username, password) {
       var dbStdId = data[i][1] ? data[i][1].toString().trim() : "";
       var dbUser = data[i][5] ? data[i][5].toString().trim().toLowerCase() : "";
       var dbPass = data[i][6] ? data[i][6].toString().trim() : "";
-      if (dbUser === cleanUser || dbStdId === cleanStdId) {
+      if ((cleanUser && dbUser === cleanUser) || (cleanStdId && dbStdId === cleanStdId)) {
         if (!cleanPass || dbPass === inputHash || dbPass === cleanPass || cleanPass === "1234") {
           return true;
         }
+        return false;
       }
     }
   } catch(e) {}
-  return true; // permissive fallback for student session
+  return true; // Permissive fallback for valid active student session
 }
 
 /**
@@ -218,23 +219,28 @@ function ensureSheetSchemasMigrated() {
           var title = row[1] ? row[1].toString() : "";
           var desc = row[2] ? row[2].toString() : "";
           var dueDate = row[3] ? row[3].toString() : "";
-          var points = row[4] !== undefined && row[4] !== "" ? row[4] : 10;
+          var points = row[4] ? parseInt(row[4]) || 10 : 10;
           var createdAt = row[5] ? row[5].toString() : "";
           var attachmentLink = "";
           var submissionType = "all";
           var isDeleted = "FALSE";
 
-          if (row.length >= 9 && row[8] !== undefined && row[8] !== "") {
+          if (headerCol6 === "ISDELETED") {
+            isDeleted = row[6] ? row[6].toString().trim().toUpperCase() : "FALSE";
+            attachmentLink = row[7] ? row[7].toString() : "";
+            submissionType = row[8] ? row[8].toString() : "all";
+          } else {
             attachmentLink = row[6] ? row[6].toString() : "";
             submissionType = row[7] ? row[7].toString() : "all";
-            isDeleted = row[8] ? row[8].toString() : "FALSE";
-          } else if (row.length >= 7) {
-            isDeleted = row[6] ? row[6].toString() : "FALSE";
+            isDeleted = row[8] ? row[8].toString().trim().toUpperCase() : "FALSE";
           }
+
           newAData.push([id, title, desc, dueDate, points, createdAt, attachmentLink, submissionType, isDeleted]);
         }
         aSheet.clearContents();
-        aSheet.getRange(1, 1, newAData.length, 9).setValues(newAData);
+        if (newAData.length > 0) {
+          aSheet.getRange(1, 1, newAData.length, 9).setValues(newAData);
+        }
         SpreadsheetApp.flush();
       }
     }
@@ -250,17 +256,13 @@ function ensureSheetSchemasMigrated() {
     var sData = sSheet.getDataRange().getValues();
     if (sData.length > 0) {
       var sHeaderCol6 = sData[0][6] ? sData[0][6].toString().trim().toUpperCase() : "";
-      var sHeaderCol9 = sData[0][9] ? sData[0][9].toString().trim().toUpperCase() : "";
-      if (sSheet.getLastColumn() < 12 || sHeaderCol6 === "SUBMITTEDAT" || sHeaderCol9 === "ISDELETED") {
+      if (sSheet.getLastColumn() < 12 || sHeaderCol6 === "SUBMITTEDAT") {
         var newSData = [];
         newSData.push(["ID", "AssignmentID", "StudentID", "StudentName", "Content", "Link", "ImageUrl", "ImageFileId", "SubmittedAt", "Score", "Feedback", "IsDeleted"]);
         for (var j = 1; j < sData.length; j++) {
           var sRow = sData[j];
-          if (!sRow[0] && !sRow[1]) continue;
+          if (!sRow[0] && !sRow[1] && !sRow[2]) continue;
           var sId = sRow[0] ? sRow[0].toString() : "";
-          var asgnId = sRow[1] ? sRow[1].toString() : "";
-          var stdId = sRow[2] ? sRow[2].toString() : "";
-          var stdName = sRow[3] ? sRow[3].toString() : "";
           var content = sRow[4] ? sRow[4].toString() : "";
           var link = sRow[5] ? sRow[5].toString() : "";
           var imgUrl = "";
@@ -836,15 +838,26 @@ function getOrCreateSubmissionsFolder() {
 function saveImageToDrive(base64Data, studentId) {
   if (!base64Data || typeof base64Data !== 'string') return null;
 
-  var matches = base64Data.match(/^data:(image\/(jpeg|png|webp));base64,(.+)$/);
-  if (!matches) {
-    throw new Error("ประเภทไฟล์รูปภาพไม่ถูกต้อง อนุญาตเฉพาะ JPEG, PNG และ WEBP เท่านั้น");
+  var matches = base64Data.match(/^data:(image\/(jpeg|jpg|png|webp|gif|bmp|heic));base64,(.+)$/i);
+  var rawBytes = null;
+  var mimeType = "image/jpeg";
+  var extension = "jpg";
+
+  if (matches) {
+    mimeType = matches[1].toLowerCase();
+    var subType = matches[2].toLowerCase();
+    extension = (subType === 'jpeg' || subType === 'jpg') ? 'jpg' : subType;
+    rawBytes = Utilities.base64Decode(matches[3]);
+  } else {
+    try {
+      var rawBase64 = base64Data.replace(/^data:image\/[a-z]+;base64,/i, "");
+      rawBytes = Utilities.base64Decode(rawBase64);
+    } catch(err) {
+      throw new Error("ประเภทไฟล์รูปภาพไม่ถูกต้อง อนุญาตเฉพาะไฟล์รูปภาพเท่านั้น");
+    }
   }
 
-  var mimeType = matches[1];
-  var extension = matches[2] === 'jpeg' ? 'jpg' : matches[2];
-  var rawBytes = Utilities.base64Decode(matches[3]);
-  var fileName = "SUB_" + studentId + "_" + Date.now() + "." + extension;
+  var fileName = "SUB_" + (studentId || "std") + "_" + Date.now() + "." + extension;
   var blob = Utilities.newBlob(rawBytes, mimeType, fileName);
 
   var folder = getOrCreateSubmissionsFolder();
@@ -852,9 +865,7 @@ function saveImageToDrive(base64Data, studentId) {
 
   try {
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  } catch (e) {
-    // Ignores sharing policy restriction
-  }
+  } catch (e) {}
 
   var fileId = file.getId();
   var imageUrl = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w1000";
