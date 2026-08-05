@@ -347,21 +347,13 @@
                         const defaultGasUrl = "https://script.google.com/macros/s/1FTTeb8fSgisUr5JAsgGMsRhiyQrLShmu5Wzmc_N9Z2ahxxIgTHP3YxjB/exec";
                         const apiUrl = (typeof window !== 'undefined' && localStorage.getItem('gudjap_gas_api_url')) || defaultGasUrl;
                         
-                        const getUrl = `${apiUrl}?action=${encodeURIComponent(serverMethodName)}&args=${encodeURIComponent(JSON.stringify(args))}&t=${Date.now()}`;
-                        
-                        fetch(getUrl, { redirect: 'follow' })
-                        .then(res => res.json())
-                        .then(res => {
-                            if (finished) return;
-                            finished = true;
-                            clearTimeout(timer);
-                            onSuccess(res);
-                        })
-                        .catch(err => {
-                            // Fallback to URLSearchParams POST
+                        const jsonArgs = JSON.stringify(args);
+
+                        // ฟังก์ชันส่ง POST (สำหรับข้อมูลขนาดใหญ่หรือส่งงาน/การบ้าน)
+                        const sendPostRequest = () => {
                             const params = new URLSearchParams();
                             params.append('action', serverMethodName);
-                            params.append('args', JSON.stringify(args));
+                            params.append('args', jsonArgs);
                             
                             fetch(apiUrl, {
                                 method: 'POST',
@@ -385,7 +377,25 @@
                                     onFailure(err2);
                                 }
                             });
-                        });
+                        };
+
+                        // หากอาร์กิวเมนต์มีขนาดใหญ่เกิน 500 ตัวอักษร หรือเป็นเมธอดส่งงาน/บันทึก ให้ส่ง POST โดยตรงทันที
+                        if (jsonArgs.length > 500 || serverMethodName.includes('submit') || serverMethodName.includes('save') || serverMethodName.includes('update') || serverMethodName.includes('grade')) {
+                            sendPostRequest();
+                        } else {
+                            const getUrl = `${apiUrl}?action=${encodeURIComponent(serverMethodName)}&args=${encodeURIComponent(jsonArgs)}&t=${Date.now()}`;
+                            fetch(getUrl, { redirect: 'follow' })
+                            .then(res => res.json())
+                            .then(res => {
+                                if (finished) return;
+                                finished = true;
+                                clearTimeout(timer);
+                                onSuccess(res);
+                            })
+                            .catch(err => {
+                                sendPostRequest();
+                            });
+                        }
                     }
                 };
                 execute();
