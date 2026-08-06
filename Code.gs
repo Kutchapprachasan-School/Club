@@ -263,6 +263,9 @@ function ensureSheetSchemasMigrated() {
           var sRow = sData[j];
           if (!sRow[0] && !sRow[1] && !sRow[2]) continue;
           var sId = sRow[0] ? sRow[0].toString() : "";
+          var asgnId = sRow[1] ? sRow[1].toString() : "";
+          var stdId = sRow[2] ? sRow[2].toString() : "";
+          var stdName = sRow[3] ? sRow[3].toString() : "";
           var content = sRow[4] ? sRow[4].toString() : "";
           var link = sRow[5] ? sRow[5].toString() : "";
           var imgUrl = "";
@@ -1073,8 +1076,10 @@ function submitAssignmentOnSheet(assignmentId, studentId, studentName, content, 
     var newImageUrl = uploadedMedia ? uploadedMedia.imageUrl : "";
     var newImageFileId = uploadedMedia ? uploadedMedia.fileId : "";
 
+    var finalSubId = "";
     if (matchingRowIndices.length > 0) {
       var targetRow = matchingRowIndices[matchingRowIndices.length - 1];
+      finalSubId = data[targetRow - 1][0] ? data[targetRow - 1][0].toString() : Utilities.getUuid();
 
       // หากมีรูปภาพใหม่ และมีรูปภาพเดิมอยู่แล้ว ให้สั่งลบไฟล์เก่าทิ้ง (ครอบด้วย try-catch ป้องกันบักสคริปต์ล่ม)
       if (newImageFileId && oldImageFileId && oldImageFileId !== newImageFileId) {
@@ -1098,12 +1103,12 @@ function submitAssignmentOnSheet(assignmentId, studentId, studentName, content, 
         sheet.getRangeList(duplicateA1Ranges).setValue("TRUE");
       }
     } else {
-      var newId = Utilities.getUuid();
-      sheet.appendRow([newId, assignmentId, studentId, cleanStdName, cleanContent, cleanLink, newImageUrl, newImageFileId, submittedAtStr, "", "", "FALSE"]);
+      finalSubId = Utilities.getUuid();
+      sheet.appendRow([finalSubId, assignmentId, studentId, cleanStdName, cleanContent, cleanLink, newImageUrl, newImageFileId, submittedAtStr, "", "", "FALSE"]);
     }
 
     SpreadsheetApp.flush();
-    return { success: true };
+    return { success: true, submissionId: finalSubId, imageUrl: newImageUrl, imageFileId: newImageFileId };
   } catch(e) {
     // Rollback: หากเกิดความผิดพลาดในการเขียนลง Sheet ให้ลบรูปภาพใหม่ที่เพิ่งอัปโหลดทิ้งทันที
     if (uploadedMedia && uploadedMedia.fileId) {
@@ -1135,15 +1140,19 @@ function gradeSubmissionOnSheet(submissionId, score, feedback, authUser, authPas
 
     var data = sheet.getDataRange().getValues();
     var targetRow = -1;
+    var cleanSubId = String(submissionId || '').trim();
+
     for (var i = 1; i < data.length; i++) {
-      if (data[i][0].toString().trim() === String(submissionId).trim()) {
+      var rowSubId = data[i][0] ? data[i][0].toString().trim() : "";
+      var isDel = data[i][11] ? data[i][11].toString().trim().toUpperCase() : "FALSE";
+      if (rowSubId === cleanSubId && isDel !== "TRUE") {
         targetRow = i + 1;
         break;
       }
     }
 
     if (targetRow !== -1) {
-      var cleanScore = score !== "" && score !== null ? parseFloat(score) : "";
+      var cleanScore = score !== "" && score !== null && score !== undefined && !isNaN(score) ? parseFloat(score) : "";
       var cleanFeedback = sanitizeCellText(feedback);
       // Col 10 (J) = Score, Col 11 (K) = Feedback
       sheet.getRange(targetRow, 10, 1, 2).setValues([[cleanScore, cleanFeedback]]);
