@@ -736,7 +736,7 @@
                 const stdName = `${currentUser.prefix || ''}${currentUser.name}`;
                 const savedGasUrl = (typeof window !== 'undefined' && localStorage.getItem('gudjap_gas_api_url')) || '';
 
-                if (isOfflineMode || !savedGasUrl) {
+                if (isOfflineMode) {
                     const newSub = {
                         id: 'sub-' + Date.now(),
                         assignmentId: activeSubmitAssignment.id,
