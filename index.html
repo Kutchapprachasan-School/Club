@@ -1282,8 +1282,43 @@
             // ดึงสถิตินักเรียนเฉพาะตนเอง
             const myPersonalStats = useMemo(() => {
                 if (!currentUser || currentUser.role !== 'student') return null;
-                return studentStatsMap[currentUser.studentId] || { present: 0, late: 0, leave: 0, absent: 0, totalDays: 0, attendanceRate: 0, isPassed: false };
+                const matchId = String(currentUser.studentId || '').trim();
+                const key = Object.keys(studentStatsMap).find(k => String(k).trim() === matchId);
+                return (key && studentStatsMap[key]) || studentStatsMap[currentUser.studentId] || { present: 0, late: 0, leave: 0, absent: 0, totalDays: 0, attendanceRate: 0, isPassed: false };
             }, [currentUser, studentStatsMap]);
+
+            // ประวัติเวลามาเรียนเฉพาะตนเอง (รายวัน)
+            const myAttendanceHistory = useMemo(() => {
+                if (!currentUser || currentUser.role !== 'student') return [];
+                const stdIdStr = String(currentUser.studentId || '').trim();
+                const history = [];
+                Object.keys(records).sort().reverse().forEach(dateStr => {
+                    const dayObj = records[dateStr];
+                    if (dayObj) {
+                        const matchedKey = Object.keys(dayObj).find(k => String(k).trim() === stdIdStr);
+                        if (matchedKey) {
+                            history.push({
+                                date: dateStr,
+                                status: dayObj[matchedKey]
+                            });
+                        }
+                    }
+                });
+                return history;
+            }, [currentUser, records]);
+
+            // รายการส่งงานและคะแนนเฉพาะตนเอง
+            const mySubmissionsList = useMemo(() => {
+                if (!currentUser || currentUser.role !== 'student') return [];
+                const stdIdStr = String(currentUser.studentId || '').trim();
+                return assignments.map(asgn => {
+                    const sub = submissions.find(s => String(s.assignmentId).trim() === String(asgn.id).trim() && String(s.studentId).trim() === stdIdStr);
+                    return {
+                        assignment: asgn,
+                        submission: sub || null
+                    };
+                });
+            }, [currentUser, assignments, submissions]);
 
             // คัดลอกข้อมูลรายวัน
             const copyToClipboard = () => {
